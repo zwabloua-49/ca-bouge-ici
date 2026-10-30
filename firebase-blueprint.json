@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Public user profile and neighborhood affiliation",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "commune": { "type": "string", "maxLength": 100 },
+        "quartier": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" },
+        "role": { "type": "string", "enum": ["resident", "admin", "moderator"] }
+      },
+      "required": ["displayName", "email", "createdAt"]
+    },
+    "Publication": {
+      "title": "Local Publication",
+      "description": "Local community posts, news, breakdowns, events, and neighborhood alerts",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "category": {
+          "type": "string",
+          "enum": ["electricite", "eau", "circulation", "route", "evenement", "commerce_promo", "entraide", "autre"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["non_verifie", "en_cours", "confirme", "resolu"]
+        },
+        "city": { "type": "string", "maxLength": 100 },
+        "commune": { "type": "string", "maxLength": 100 },
+        "quartier": { "type": "string", "maxLength": 100 },
+        "landmark": { "type": "string", "maxLength": 250 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 100 },
+        "confirmationsCount": { "type": "integer" },
+        "contestationsCount": { "type": "integer" },
+        "confirmedBy": { "type": "array" },
+        "contestedBy": { "type": "array" },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "resolutionNote": { "type": "string", "maxLength": 500 },
+        "isDemo": { "type": "boolean" },
+        "abuseReportsCount": { "type": "integer" }
+      },
+      "required": ["title", "description", "category", "createdAt", "authorId", "authorName"]
+    },
+    "Business": {
+      "title": "Local Business",
+      "description": "Verified neighborhood businesses, pharmacies, maquis, and services",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 150 },
+        "category": {
+          "type": "string",
+          "enum": ["pharmacie", "maquis", "superette", "services", "artisanat"]
+        },
+        "description": { "type": "string", "maxLength": 1000 },
+        "city": { "type": "string", "maxLength": 100 },
+        "commune": { "type": "string", "maxLength": 100 },
+        "quartier": { "type": "string", "maxLength": 100 },
+        "landmark": { "type": "string", "maxLength": 250 },
+        "declaredHours": { "type": "string", "maxLength": 150 },
+        "isOnDuty": { "type": "boolean" },
+        "lastVerifiedDate": { "type": "string", "maxLength": 100 },
+        "verificationNote": { "type": "string", "maxLength": 250 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "whatsapp": { "type": "string", "maxLength": 50 },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "tags": { "type": "array" },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "isDemo": { "type": "boolean" }
+      },
+      "required": ["name", "category", "city", "commune", "quartier", "landmark", "phone"]
+    },
+    "AbuseReport": {
+      "title": "Abuse Report",
+      "description": "Community moderation flag for false reports or inappropriate content",
+      "type": "object",
+      "properties": {
+        "reportId": { "type": "string", "maxLength": 128 },
+        "reportTitle": { "type": "string", "maxLength": 200 },
+        "reason": {
+          "type": "string",
+          "enum": ["fausse_information", "spam", "propos_inappropries", "doublon", "autre"]
+        },
+        "comment": { "type": "string", "maxLength": 1000 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "reviewed", "dismissed"]
+        }
+      },
+      "required": ["reportId", "reason", "createdAt", "authorId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Public user profile and neighborhood preferences"
+    },
+    "/publications/{publicationId}": {
+      "schema": "Publication",
+      "description": "Official community publications, local news, and citizen reports in neighborhoods"
+    },
+    "/reports/{reportId}": {
+      "schema": "Publication",
+      "description": "Citizen reports, breakdown alerts, events and mutual aid"
+    },
+    "/businesses/{businessId}": {
+      "schema": "Business",
+      "description": "Local shops, pharmacies on duty, maquis, artisan workshops"
+    },
+    "/abuse_reports/{abuseId}": {
+      "schema": "AbuseReport",
+      "description": "Abuse flags for moderation"
+    },
+    "/admins/{userId}": {
+      "schema": "User",
+      "description": "Designated administrator documents for privilege verification"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "appId": "ci.cabougeici.app",
+  "appName": "Ça Bouge Ici",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "buildOptions": {
+      "keystorePath": "",
+      "keystoreAlias": ""
+    }
+  }
+}

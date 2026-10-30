@@ -1,0 +1,195 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Health probe rule
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'zwabloua@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- User Validation ---
+    function isValidUser(data) {
+      return data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() <= 150 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+             (!('commune' in data) || (data.commune is string && data.commune.size() <= 100)) &&
+             (!('quartier' in data) || (data.quartier is string && data.quartier.size() <= 100)) &&
+             data.createdAt is string &&
+             (!('role' in data) || data.role in ['resident', 'admin', 'moderator']);
+    }
+
+    // --- Publication & Report Validation ---
+    function isValidPublication(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.description is string && data.description.size() > 0 && data.description.size() <= 2000 &&
+             data.category in ['electricite', 'eau', 'circulation', 'route', 'evenement', 'commerce_promo', 'entraide', 'autre'] &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             data.authorName is string && data.authorName.size() <= 100 &&
+             data.createdAt is string &&
+             (!('status' in data) || data.status in ['non_verifie', 'en_cours', 'confirme', 'resolu']) &&
+             (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
+             (!('commune' in data) || (data.commune is string && data.commune.size() <= 100)) &&
+             (!('quartier' in data) || (data.quartier is string && data.quartier.size() <= 100)) &&
+             (!('landmark' in data) || (data.landmark is string && data.landmark.size() <= 250)) &&
+             (!('confirmationsCount' in data) || (data.confirmationsCount is int && data.confirmationsCount >= 0)) &&
+             (!('contestationsCount' in data) || (data.contestationsCount is int && data.contestationsCount >= 0)) &&
+             (!('confirmedBy' in data) || data.confirmedBy is list) &&
+             (!('contestedBy' in data) || data.contestedBy is list) &&
+             (!('abuseReportsCount' in data) || data.abuseReportsCount is int) &&
+             (!('coordinates' in data) || data.coordinates is map) &&
+             (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000)) &&
+             (!('resolutionNote' in data) || data.resolutionNote == null || (data.resolutionNote is string && data.resolutionNote.size() <= 500)) &&
+             (!('isDemo' in data) || data.isDemo is bool);
+    }
+
+    // --- Business Validation ---
+    function isValidBusiness(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+             data.category in ['pharmacie', 'maquis', 'superette', 'services', 'artisanat'] &&
+             data.city is string && data.city.size() <= 100 &&
+             data.commune is string && data.commune.size() <= 100 &&
+             data.quartier is string && data.quartier.size() <= 100 &&
+             data.landmark is string && data.landmark.size() <= 250 &&
+             data.phone is string && data.phone.size() <= 50 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             (!('declaredHours' in data) || (data.declaredHours is string && data.declaredHours.size() <= 150)) &&
+             (!('isOnDuty' in data) || data.isOnDuty is bool) &&
+             (!('whatsapp' in data) || (data.whatsapp is string && data.whatsapp.size() <= 50)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000));
+    }
+
+    // --- Abuse Report Validation ---
+    function isValidAbuseReport(data) {
+      return data.reportId is string && data.reportId.size() <= 128 &&
+             data.reason in ['fausse_information', 'spam', 'propos_inappropries', 'doublon', 'autre'] &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             data.status in ['pending', 'reviewed', 'dismissed'] &&
+             (!('comment' in data) || (data.comment is string && data.comment.size() <= 1000));
+    }
+
+    // ==========================================
+    // 1. Users Collection
+    // ==========================================
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) &&
+                       isValidUser(incoming()) &&
+                       (!('role' in incoming()) || incoming().role == 'resident' || isAdmin());
+      allow update: if (
+        isOwner(userId) &&
+        isValidUser(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        (!('role' in incoming()) || incoming().role == existing().role || isAdmin())
+      ) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // ==========================================
+    // 2. Local Publications Collection (Requested: "publications")
+    // ==========================================
+    match /publications/{publicationId} {
+      // Anyone can read local neighborhood publications to stay informed
+      allow read: if true;
+
+      // Only signed-in residents can create publications
+      allow create: if isSignedIn() &&
+                       isValidId(publicationId) &&
+                       isValidPublication(incoming());
+
+      // Update: Either author edits, residents vote, or admin moderates
+      allow update: if isSignedIn() && (
+        // Author full update
+        (existing().authorId == request.auth.uid &&
+         incoming().authorId == existing().authorId &&
+         incoming().createdAt == existing().createdAt) ||
+        // Community Vote action (restricted keys only)
+        (incoming().diff(existing()).affectedKeys().hasOnly(['confirmationsCount', 'contestationsCount', 'confirmedBy', 'contestedBy', 'status', 'updatedAt']) &&
+         incoming().authorId == existing().authorId &&
+         incoming().createdAt == existing().createdAt) ||
+        // Admin override
+        isAdmin()
+      );
+
+      // Delete: Only original author or Admin
+      allow delete: if isSignedIn() && (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    // ==========================================
+    // 3. Citizen Reports Collection (Legacy/Alias support)
+    // ==========================================
+    match /reports/{reportId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(reportId) && isValidPublication(incoming());
+      allow update: if isSignedIn() && (
+        (existing().authorId == request.auth.uid && incoming().authorId == existing().authorId && incoming().createdAt == existing().createdAt) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['confirmationsCount', 'contestationsCount', 'confirmedBy', 'contestedBy', 'status', 'updatedAt']) && incoming().authorId == existing().authorId && incoming().createdAt == existing().createdAt) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    // ==========================================
+    // 4. Local Businesses Collection
+    // ==========================================
+    match /businesses/{businessId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(businessId) && isValidBusiness(incoming());
+      allow update: if isSignedIn() && (
+        (existing().authorId == request.auth.uid && incoming().authorId == existing().authorId) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (existing().authorId == request.auth.uid || isAdmin());
+    }
+
+    // ==========================================
+    // 5. Abuse Moderation Reports
+    // ==========================================
+    match /abuse_reports/{abuseId} {
+      allow create: if isSignedIn() && isValidId(abuseId) && isValidAbuseReport(incoming());
+      allow read: if isSignedIn() && (existing().authorId == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 6. Admin Registry
+    // ==========================================
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

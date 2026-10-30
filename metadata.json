@@ -1,0 +1,6 @@
+{
+  "name": "Ça Bouge Ici",
+  "description": "Le quotidien de ton quartier, en temps réel. Informations locales, coupures, circulation, commerces et entraide en Côte d'Ivoire.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
